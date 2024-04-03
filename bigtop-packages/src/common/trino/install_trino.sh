@@ -15,20 +15,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -e
+set -ex
 
 usage() {
   echo "
 usage: $0 <options>
   Required not-so-options:
-     --build-dir=DIR             path to dist.dir
-     --source-dir=DIR            path to package shared files dir
+     --build-dir=DIR             path to Alluxio dist.dir
      --prefix=PREFIX             path to install into
+
   Optional options:
-     --doc-dir=DIR               path to install docs into [/usr/share/doc/trino]
-     --lib-dir=DIR               path to install trino home [/usr/lib/trino]
-     --installed-lib-dir=DIR     path where lib-dir will end up on target system
-     --bin-dir=DIR               path to install bins [/usr/bin]
+     --bin-dir=DIR               path to install bin
+     --data-dir=DIR              path to install local Alluxio data
      ... [ see source for more similar options ]
   "
   exit 1
@@ -38,12 +36,11 @@ OPTS=$(getopt \
   -n $0 \
   -o '' \
   -l 'prefix:' \
+  -l 'var-dir:' \
   -l 'lib-dir:' \
-  -l 'installed-lib-dir:' \
-  -l 'bin-dir:' \
-  -l 'trino-version:' \
-  -l 'source-dir:' \
   -l 'cli-dir:' \
+  -l 'cli-build-dir:' \
+  -l 'conf-dist-dir:' \
   -l 'build-dir:' -- "$@")
 
 if [ $? != 0 ] ; then
@@ -59,21 +56,21 @@ while true ; do
         --build-dir)
         BUILD_DIR=$2 ; shift 2
         ;;
-        --source-dir)
-        SOURCE_DIR=$2 ; shift 2
-        ;;
-        --cli-dir)
-        CLI_BUILD_DIR=$2 ; shift 2
-        ;;
         --lib-dir)
         LIB_DIR=$2 ; shift 2
         ;;
-        --installed-lib-dir)
-        INSTALLED_LIB_DIR=$2 ; shift 2
+        --cli-build-dir)
+        CLI_BUILD_DIR=$2 ; shift 2
         ;;
-        --bin-dir)
-        BIN_DIR=$2 ; shift 2
+        --cli-dir)
+        CLI_DIR=$2 ; shift 2
         ;;
+        --var-dir)
+        VAR_DIR=$2 ; shift 2
+        ;;
+		--conf-dist-dir)
+		CONF_DIST_DIR=$2 ; shift 2
+		;;
         --)
         shift ; break
         ;;
@@ -85,46 +82,47 @@ while true ; do
     esac
 done
 
-for var in PREFIX BUILD_DIR SOURCE_DIR ; do
+for var in PREFIX BUILD_DIR ; do
   if [ -z "$(eval "echo \$$var")" ]; then
     echo Missing param: $var
     usage
   fi
 done
 
-if [ -f "$SOURCE_DIR/bigtop.bom" ]; then
-  . $SOURCE_DIR/bigtop.bom
-fi
+. /etc/os-release
+OS="$ID"
 
-MAN_DIR=${MAN_DIR:-/usr/share/man}/man1
-DOC_DIR=${DOC_DIR:-/usr/share/doc/trino}
+
 CLI_DIR=${CLI_DIR:-/usr/lib/trino-cli}
-LIB_DIR=${TRINO_DIR:-/usr/lib/trino}
+LIB_DIR=${LIB_DIR:-/usr/lib/trino}
 VAR_DIR=${VAR_DIR:-/var/lib/trino}
 LOG_DIR=${LOG_DIR:-/var/log/trino}
 RUN_DIR=${RUN_DIR:-/var/run/trino}
-INSTALLED_LIB_DIR=${INSTALLED_LIB_DIR:-/usr/lib/trino}
 BIN_DIR=${BIN_DIR:-/usr/bin}
-CONF_DIR=${CONF_DIR:-/etc/trino}
 CONF_DIST_DIR=${CONF_DIST_DIR:-/etc/trino.dist}
-DEFAULT_DIR=${DEFAULT_DIR:-/etc/default}
+
+NP_ETC_TRINO=/etc/trino
 
 install -d -m 0755 $PREFIX/$CONF_DIST_DIR
+install -d -m 0755 $PREFIX/$CONF_DIST_DIR/catalog
 install -d -m 0755 $PREFIX/$LIB_DIR
+install -d -m 0755 $PREFIX/$LIB_DIR/var
 install -d -m 0755 $PREFIX/$CLI_DIR
-install -d -m 0755 $PREFIX/$DOC_DIR
 install -d -m 0755 $PREFIX/$VAR_DIR
 install -d -m 0755 $PREFIX/$LOG_DIR
 install -d -m 0755 $PREFIX/$RUN_DIR
-install -d -m 0755 $PREFIX/$DEFAULT_DIR
+install -d -m 0755 $PREFIX/$NP_ETC_TRINO
 
 cp -ra ${BUILD_DIR}/* $PREFIX/$LIB_DIR/
 cp -ra ${CLI_BUILD_DIR}/* $PREFIX/$CLI_DIR/
 
+ln -s $NP_ETC_TRINO/conf $PREFIX/$LIB_DIR/etc
+ln -s $RUN_DIR $PREFIX/$LIB_DIR/var/run
+ln -s $LOG_DIR $PREFIX/$LIB_DIR/var/log
+
 chmod +x $PREFIX/$LIB_DIR/bin/launcher
 
-install -d -m 0755 $PREFIX/$CONF_DIST_DIR
-install -d -m 0755 $PREFIX/$CONF_DIST_DIR/catalog
+
 
 cat > $PREFIX/$CONF_DIST_DIR/node.properties <<EOF
 node.environment=production
@@ -189,5 +187,3 @@ EOF
 cat > $PREFIX/$CONF_DIST_DIR/catalog/jmx.properties <<EOF
 connector.name=jmx
 EOF
-
-ln -s ${CONF_DIR} $PREFIX/$LIB_DIR/etc

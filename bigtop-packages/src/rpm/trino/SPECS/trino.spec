@@ -14,15 +14,26 @@
 # limitations under the License.
 
 %define trino_name trino
+%define trino_pkg_name trino%{pkg_name_suffix}
+
 %define trino_cli_name trino-cli
-%define lib_trino /usr/lib/%{trino_name}
-%define lib_trino_cli /usr/lib/%{trino_cli_name}
-%define var_lib_trino /var/lib/%{trino_name}
+
+
+
+%define etc_default %{parent_dir}/etc/default
+%define usr_lib_trino %{parent_dir}/usr/lib/%{trino_name}
+%define usr_lib_trino_cli %{parent_dir}/usr/lib/%{trino_cli_name}
+
+%define var_lib_trino %{parent_dir}/var/lib/%{trino_name}
+%define etc_trino %{parent_dir}/etc/%{trino_name}
+%define np_etc_trino /etc/%{trino_name}
+%define etc_trino_conf_dist %{parent_dir}/etc/%{trino_name}/conf.dist
+%define bin_dir %{parent_dir}/%{_bindir}
+
 %define var_run_trino /var/run/%{trino_name}
 %define var_log_trino /var/log/%{trino_name}
-%define bin_trino %{lib_trino}/bin/
-%define etc_trino %{lib_trino}/etc/
 %define config_trino /etc/%{trino_name}
+
 %define bin /usr/bin/
 %define man_dir /usr/share/man/man1
 %define trino_services server
@@ -39,8 +50,11 @@
 
 # disable repacking jars
 %define __os_install_post %{nil}
+%define __jar_repack %{nil}
+%define  debug_package %{nil}
 
-Name: %{trino_name}
+
+Name: %{trino_pkg_name}
 Version: %{trino_version}
 Release: %{trino_release}
 Summary: Distributed SQL Query Engine for Big Data
@@ -91,7 +105,7 @@ from gigabytes to petabytes.
 Summary: trino Server
 Group: Development/Libraries
 BuildArch: noarch
-Requires: %{name} = %{version}-%{release}
+Requires: %{trino_pkg_name} = %{version}-%{release}
 
 %description server
 Server for trino
@@ -100,7 +114,7 @@ Server for trino
 Summary: trino CLI
 Group: Development/Libraries
 BuildArch: noarch
-Requires: trino = %{version}-%{release}
+Requires: %{trino_pkg_name} = %{version}-%{release}
 
 %description cli
 CLI for trino
@@ -115,10 +129,13 @@ bash %{SOURCE1}
 %__rm -rf $RPM_BUILD_ROOT
 %__install -d -m 0755 $RPM_BUILD_ROOT/%{initd_dir}/
 bash %{SOURCE2} \
-          --build-dir=build/trino \
-          --cli-dir=build/trino-cli \
-          --source-dir=$RPM_SOURCE_DIR \
-          --prefix=$RPM_BUILD_ROOT
+        --cli-build-dir=build/trino-cli \
+        --cli-dir=%{usr_lib_trino_cli} \
+        --build-dir=build/trino \
+        --lib-dir=%{usr_lib_trino}  \
+        --var-dir=%{var_lib_trino}  \
+        --prefix=${RPM_BUILD_ROOT} \
+        --conf-dist-dir=%{etc_trino_conf_dist}
 
 for service in %{trino_services}
 do
@@ -127,12 +144,18 @@ do
   bash $RPM_SOURCE_DIR/init.d.tmpl $RPM_SOURCE_DIR/trino-${service}.svc rpm $init_file
 done
 
+
+%pre
+getent group trino >/dev/null || groupadd -r trino
+getent passwd trino >/dev/null || useradd -c "Trino" -s /sbin/nologin -g trino -r -d %{var_lib} trino 2> /dev/null || :
+
+
 %post
-%{alternatives_cmd} --install /etc/trino %{trino_name}-conf /etc/trino.dist 30
+%{alternatives_cmd} --install %{np_etc_trino}/conf %{trino_name}-conf %{etc_trino}/conf.dist 30
 
 %preun
 if [ "$1" = 0 ]; then
-        %{alternatives_cmd} --remove %{trino_name}-conf /etc/trino.dist || :
+        %{alternatives_cmd} --remove %{trino_name}-conf %{etc_trino}/conf.dist || :
 fi
 
 for service in %{trino_services}; do
@@ -145,16 +168,14 @@ done
 
 %files
 %defattr(-,root,root,755)
-%config(noreplace) %{config_trino}.dist
-%{lib_trino}/README.txt
-%{lib_trino}/NOTICE
-%{lib_trino}/bin
-%{lib_trino}/lib
-%{lib_trino}/plugin
-%{lib_trino}/etc
+%attr(0755,root,root) %{usr_lib_trino}
+%attr(0755,trino,trino) %config(noreplace) %{np_etc_trino}
+%config(noreplace) %{etc_trino}/conf.dist
+%attr(0755,trino,trino) %{var_run_trino}
+%attr(0755,trino,trino) %{var_log_trino}
 
 %files cli
-%{lib_trino_cli}/trino
+%{usr_lib_trino_cli}
 
 %define service_macro() \
 %files %1 \
@@ -172,4 +193,3 @@ if [ "$?" -ge 1 ]; then \
         service %{trino_name}-%1 condrestart > /dev/null 2>&1 || : \
 fi
 %service_macro server
-

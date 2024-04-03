@@ -37,14 +37,9 @@ generate_functions() {
 cat <<'__EOT__'
 
 trino_env() {
-    sudo puppet apply jdk17_download.pp
     # Set JAVA_HOME for this session to the JDK downloaded by the Puppet manifest
     export JAVA_HOME=/opt/jdk-17.0.2
-    echo JAVA_HOME=`pwd`/`ls | grep "jdk-*"` >> ~/.bash_profile
-    source ~/.bash_profile
-    echo $JAVA_HOME
-    export PATH=/tmp/jdk-17.0.2/bin:$PATH
-    echo $PATH
+    export PATH=/opt/jdk-17.0.2/bin:$PATH
 }
 
 __EOT__
@@ -122,4 +117,3 @@ stop() {
 __EOT__
 
 }
-

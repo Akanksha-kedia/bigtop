@@ -72,7 +72,9 @@ leaves = {
            "ranger-tagsync" : "ranger-tagsync",
            "alluxio": "alluxio",
            "alluxio-master": "alluxio",
-           "alluxio-worker": "alluxio"
+           "alluxio-worker": "alluxio",
+           "trino": "trino",
+           "trino-cli": "trino-cli"
 }
 
 # Define the aliases and the list of leaves they correspond to
